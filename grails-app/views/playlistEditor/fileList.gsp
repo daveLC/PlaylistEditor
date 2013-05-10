@@ -5,6 +5,12 @@
   <title></title>
 </head>
 <body>
-
+<ul>
+    <g:each in="${fileList}" var="file">
+        <li>
+            ${file.name}
+        </li>
+    </g:each>
+</ul>
 </body>
 </html>
