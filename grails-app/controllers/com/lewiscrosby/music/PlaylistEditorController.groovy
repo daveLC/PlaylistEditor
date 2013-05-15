@@ -13,6 +13,8 @@ class PlaylistEditorController {
 
         def fileList = playlistEditorService.getFileList()
 
+        playlistEditorService.getCurrentPlaylist()
+
         render (view: 'fileList', model: [fileList: fileList])
     }
 }
