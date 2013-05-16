@@ -1,7 +1,10 @@
 package com.lewiscrosby.jna;
 
 import com.sun.jna.*;
+import com.sun.jna.platform.win32.Kernel32;
+import com.sun.jna.platform.win32.WinDef;
 import com.sun.jna.platform.win32.WinDef.HWND;
+import com.sun.jna.platform.win32.WinNT;
 import com.sun.jna.platform.win32.WinUser;
 import com.sun.jna.win32.*;
 
@@ -11,10 +14,49 @@ public class GetWindowHandle {
         User32 INSTANCE = (User32) Native.loadLibrary("user32", User32.class, W32APIOptions.DEFAULT_OPTIONS);
 
         boolean EnumWindows(WinUser.WNDENUMPROC lpEnumFunc, Pointer arg);
-        int GetWindowTextA(HWND hWnd, byte[] lpString, int nMaxCount);
+        int GetWindowTextA(HWND hWnd, char[] lpString, int nMaxCount);
         int GetClassName(HWND hwnd, char[] lpString, int nMaxCount);
         HWND FindWindow(String lpClassName, String lpWindowName);
-        int SendMessage(HWND hWnd, int msg, int num1, int num2);
+        WinDef.LRESULT SendMessage(HWND hWnd, int msg, int num1, int num2);
+        int GetWindowThreadProcessId(HWND handler, Pointer arg);
+    }
+
+    public interface Kernel32 extends Library {
+        Kernel32 INSTANCE = (Kernel32) Native.loadLibrary("kernel32", Kernel32.class);
+
+        // Optional: wraps every call to the native library in a
+        // synchronized block, limiting native calls to one at a time
+        Kernel32 SYNC_INSTANCE = (Kernel32) Native.synchronizedLibrary(INSTANCE);
+
+        //Kernel32 INSTANCE = (Kernel32) Native.loadLibrary("kernel32", Kernel32.class);
+        WinNT.HANDLE OpenProcess(int desiredAccess, boolean inheritHandle, int processId);
+
+        //DWORD WINAPI GetLastError(void);
+        int GetLastError();
+
+        boolean ReadProcessMemory(Pointer hProcess, char[] lpBaseAddress, char[] lpBuffer, int nSize, byte[] lpNumberOfBytesRead);
+
+    }
+
+    /*
+HANDLE WINAPI OpenProcess(
+_In_  DWORD dwDesiredAccess,
+_In_  BOOL bInheritHandle,
+_In_  DWORD dwProcessId
+);
+ */
+    public static Pointer openProcess (int desiredAccess, boolean inheritHandle, int processId) {
+        System.out.println("openProcess: " + desiredAccess + "," + inheritHandle + "," + processId);
+        Kernel32 instance = Kernel32.INSTANCE;
+        WinNT.HANDLE handle = instance.OpenProcess(desiredAccess, inheritHandle, processId);
+        if (handle == null) {
+            System.out.println("Error: "+Kernel32.INSTANCE.GetLastError());
+            return null;
+        }
+        else {
+            Pointer pointer = handle.getPointer();
+            return pointer;
+        }
     }
 
     public static void enumWindows() {
@@ -23,7 +65,7 @@ public class GetWindowHandle {
             int count = 0;
             @Override
             public boolean callback(HWND hWnd, Pointer arg1) {
-                byte[] windowText = new byte[512];
+                char[] windowText = new char[512];
 
                 user32.GetWindowTextA(hWnd, windowText, 512);
                 String wText = Native.toString(windowText);
@@ -42,6 +84,23 @@ public class GetWindowHandle {
         }, null);
     }
 
+    /*
+    GetWindowThreadProcessId(hwndWinamp, &dwProcessId);
+DWORD WINAPI GetWindowThreadProcessId(
+  _In_       HWND hWnd,
+  _Out_opt_  LPDWORD lpdwProcessId
+);
+     */
+    public static int getThreadProcessId (HWND handler, Pointer processId) {
+        return User32.INSTANCE.GetWindowThreadProcessId(handler, processId);
+    }
+
+
+    public static boolean readProcessMemory(Pointer hProcess, char[] lpBaseAddress, char[] lpBuffer, int nSize, boolean lpNumberOfBytesRead) {
+        boolean success = Kernel32.INSTANCE.ReadProcessMemory(hProcess, lpBaseAddress, lpBuffer, nSize, null);
+        return success; //.hashCode();
+    }
+
     public static HWND findWindow(String className, String windowName) throws WindowNotFoundException {
         HWND hwnd = User32.INSTANCE.FindWindow(className, windowName);
         if (hwnd == null) {
@@ -50,7 +109,7 @@ public class GetWindowHandle {
         return hwnd; //.hashCode();
     }
 
-    public static int sendMessage(HWND handler, int msg, int num1, int num2) {
+    public static WinDef.LRESULT sendMessage(HWND handler, int msg, int num1, int num2) {
         return User32.INSTANCE.SendMessage(handler, msg, num1, num2);
     }
 
