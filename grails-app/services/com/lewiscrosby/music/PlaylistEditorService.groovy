@@ -16,10 +16,14 @@ class PlaylistEditorService {
     static def CURRENT_PLAYBACK_STATUS = 104
     static def CURRENT_VERSION = 0
     static def WRITE_PLAYLIST = 120
-    static def PLAYLIST_FILE_INFO = 211
-    static def PLAYLIST_LENGTH = 124
+    static def PLAYLIST_FILE_INFO_MESSAGE = 211
+    static def PLAYLIST_LENGTH_MESSAGE = 124
 
     static def PROCESS_VM_READ = 0x0010
+    static def PROCESS_VM_WRITE = 0x0020
+    static def PROCESS_VM_OPERATION = 0x0008
+
+    static def BUFFER_SIZE = 5000
 
     def getFileList() {
 
@@ -29,43 +33,61 @@ class PlaylistEditorService {
     }
 
     def getCurrentPlaylist() {
-        GetWindowHandle.enumWindows()
+        //GetWindowHandle.enumWindows()
+
+        /***** Get the Winamp window ******/
+        // HWND hwndWinamp = FindWindow("Winamp v1.x", NULL);
         def winAmpHandle = GetWindowHandle.findWindow('Winamp v1.x', null)
+        if (!winAmpHandle) {
+            return
+        }
 
-        //GetWindowThreadProcessId(hwndWinamp, &dwProcessId);
-        int processId = GetWindowHandle.getThreadProcessId(winAmpHandle, null);
-println "processId: $processId"
-        //HANDLE hProcess = OpenProcess(PROCESS_VM_OPERATION | PROCESS_VM_READ | PROCESS_VM_WRITE, FALSE, dwProcessId);
-        Pointer process = GetWindowHandle.openProcess(PROCESS_VM_READ, false, processId)
-if (!process) {
-    return
-}
-        //TCHAR szBuf[BUFSIZE];
-        char[] filenameBuffer = new char[512]
+        /***** Get the processId of Winamp ******/
+        // DWORD dwProcessId;
+        // GetWindowThreadProcessId(hwndWinamp, &dwProcessId);
+        def processId
+        GetWindowHandle.getThreadProcessId(winAmpHandle, processId);
+        println "processId: $processId"
 
-        //int nPLCount = SendMessage(hwndWinamp, WM_WA_IPC, 0, IPC_GETLISTLENGTH);
-        WinDef.LRESULT playlistFileCount = GetWindowHandle.sendMessage(winAmpHandle, WM_WAMP, 0, PLAYLIST_LENGTH)
-println "playlistFileCount: $playlistFileCount"
+        /***** Get the Winamp process *****/
+        // HANDLE hProcess = OpenProcess(PROCESS_VM_OPERATION | PROCESS_VM_READ | PROCESS_VM_WRITE, FALSE, dwProcessId);
+        def process = GetWindowHandle.openProcess(PROCESS_VM_OPERATION | PROCESS_VM_READ | PROCESS_VM_WRITE, false, processId)
+        if (!process) {
+            return
+        }
 
-        //for (int i=0; i&lt;nPLCount; i++) {
+        /***** Create the buffer in winamp's process space *****/
+        // LPTSTR pWinampBuf = (LPTSTR) VirtualAllocEx(hProcess, NULL, BUFSIZE, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+        // TODO:Pointer winampBuffer = GetWindowHandle.virtualAllocEx()
+
+        /***** Buffer to put filename into *****/
+        // TCHAR szBuf[BUFSIZE];
+        def filenameBuffer = new char[BUFFER_SIZE]
+
+        // int nPLCount = SendMessage(hwndWinamp, WM_WA_IPC, 0, IPC_GETLISTLENGTH);
+        def playlistFileCount = GetWindowHandle.sendMessage(winAmpHandle, WM_WAMP, 0, PLAYLIST_LENGTH_MESSAGE)
+        println "playlistFileCount: $playlistFileCount"
+
+        // for (int i=0; i&lt;nPLCount; i++)
         for (int i=0; i < playlistFileCount; i++) {
-        //    LPVOID pBase = (LPVOID)::SendMessage(hwndWinamp, WM_USER, i, IPC_GETPLAYLISTFILE);
-            char[] playlist = GetWindowHandle.sendMessage(winAmpHandle, WM_USER, i, PLAYLIST_FILE_INFO) as char[]
-            println playlist
 
-        //    ReadProcessMemory(hProcess, pBase, szBuf, sizeof(szBuf), NULL);
-      //public static boolean readProcessMemory(Pointer hProcess, byte[] lpBaseAddress, byte[] lpBuffer, int nSize, byte[] lpNumberOfBytesRead) {
+            // LPVOID pBase = (LPVOID)::SendMessage(hwndWinamp, WM_USER, i, IPC_GETPLAYLISTFILE);
+            def playlist = GetWindowHandle.sendMessage(winAmpHandle, WM_USER, i, PLAYLIST_FILE_INFO_MESSAGE)
 
-            GetWindowHandle.readProcessMemory(process, playlist, filenameBuffer, filenameBuffer.length.intValue(), false.booleanValue())
+
+            // ReadProcessMemory(hProcess, pBase, szBuf, sizeof(szBuf), NULL);
+            GetWindowHandle.readProcessMemory(process, playlist.toPointer(), filenameBuffer, filenameBuffer.length, false.booleanValue())
 
             // filenameBuffer now contains the filename for entry i
-            println "filenameBuffer: $filenameBuffer"
-        //}
+            String b = new String(filenameBuffer);
+            String fileName = Native.toString(filenameBuffer);
+            println "b: $b"
         }
 
 
         // 0x0400 = WM_USER
         def ret = GetWindowHandle.sendMessage(winAmpHandle, WM_USER, 0, WRITE_PLAYLIST)
+        GetWindowHandle.closeProcess(process)
         println ret
     }
 

@@ -6,9 +6,12 @@ import com.sun.jna.platform.win32.WinDef;
 import com.sun.jna.platform.win32.WinDef.HWND;
 import com.sun.jna.platform.win32.WinNT;
 import com.sun.jna.platform.win32.WinUser;
+import com.sun.jna.ptr.IntByReference;
 import com.sun.jna.win32.*;
+import org.apache.commons.codec.binary.Hex;
 
 public class GetWindowHandle {
+
 
     public interface User32 extends StdCallLibrary {
         User32 INSTANCE = (User32) Native.loadLibrary("user32", User32.class, W32APIOptions.DEFAULT_OPTIONS);
@@ -18,7 +21,9 @@ public class GetWindowHandle {
         int GetClassName(HWND hwnd, char[] lpString, int nMaxCount);
         HWND FindWindow(String lpClassName, String lpWindowName);
         WinDef.LRESULT SendMessage(HWND hWnd, int msg, int num1, int num2);
-        int GetWindowThreadProcessId(HWND handler, Pointer arg);
+        //int GetWindowThreadProcessId(HWND handler, Pointer arg);
+        int GetWindowThreadProcessId(HWND hWnd, IntByReference lpdwProcessId);
+
     }
 
     public interface Kernel32 extends Library {
@@ -34,7 +39,8 @@ public class GetWindowHandle {
         //DWORD WINAPI GetLastError(void);
         int GetLastError();
 
-        boolean ReadProcessMemory(Pointer hProcess, char[] lpBaseAddress, char[] lpBuffer, int nSize, byte[] lpNumberOfBytesRead);
+        boolean CloseHandle(WinNT.HANDLE handle);
+        boolean ReadProcessMemory(Pointer hProcess, Pointer lpBaseAddress, Pointer lpBuffer, int nSize, Pointer lpNumberOfBytesRead);
 
     }
 
@@ -46,17 +52,29 @@ _In_  DWORD dwProcessId
 );
  */
     public static Pointer openProcess (int desiredAccess, boolean inheritHandle, int processId) {
+        int PROCESS_VM_READ = 0x0010;
+        int PROCESS_VM_WRITE = 0x0020;
+        int PROCESS_VM_OPERATION = 0x0008;
+
         System.out.println("openProcess: " + desiredAccess + "," + inheritHandle + "," + processId);
         Kernel32 instance = Kernel32.INSTANCE;
-        WinNT.HANDLE handle = instance.OpenProcess(desiredAccess, inheritHandle, processId);
+
+        desiredAccess = PROCESS_VM_READ | PROCESS_VM_WRITE | PROCESS_VM_OPERATION;
+
+        WinNT.HANDLE handle = instance.OpenProcess(desiredAccess, false, 8544);
         if (handle == null) {
-            System.out.println("Error: "+Kernel32.INSTANCE.GetLastError());
+            //System.out.println("Error:"+ Native.getLastError());
+            System.out.println("Error:"+Kernel32.INSTANCE.GetLastError());
             return null;
         }
         else {
             Pointer pointer = handle.getPointer();
             return pointer;
         }
+    }
+    public static boolean closeProcess(Pointer pointer) {
+        WinNT.HANDLE handle = new WinNT.HANDLE(pointer);
+        return Kernel32.INSTANCE.CloseHandle(handle);
     }
 
     public static void enumWindows() {
@@ -91,13 +109,14 @@ DWORD WINAPI GetWindowThreadProcessId(
   _Out_opt_  LPDWORD lpdwProcessId
 );
      */
-    public static int getThreadProcessId (HWND handler, Pointer processId) {
-        return User32.INSTANCE.GetWindowThreadProcessId(handler, processId);
+    public static int getThreadProcessId (HWND handler, int processId) {
+        return User32.INSTANCE.GetWindowThreadProcessId(handler, new IntByReference(processId));
     }
 
-
-    public static boolean readProcessMemory(Pointer hProcess, char[] lpBaseAddress, char[] lpBuffer, int nSize, boolean lpNumberOfBytesRead) {
+    public static boolean readProcessMemory(Pointer hProcess, Pointer lpBaseAddress, Pointer lpBuffer, int nSize, boolean lpNumberOfBytesRead) {
         boolean success = Kernel32.INSTANCE.ReadProcessMemory(hProcess, lpBaseAddress, lpBuffer, nSize, null);
+        System.out.println("Error:" + Native.getLastError());
+        System.out.println ("success: " + success);
         return success; //.hashCode();
     }
 
