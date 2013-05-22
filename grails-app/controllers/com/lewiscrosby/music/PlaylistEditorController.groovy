@@ -17,4 +17,11 @@ class PlaylistEditorController {
 
         render (view: 'fileList', model: [fileList: fileList])
     }
+
+    def playList() {
+
+        def playlist = playlistEditorService.getPlaylist()
+
+        render (view: 'fileList', model: [fileList: []])
+    }
 }

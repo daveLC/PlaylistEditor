@@ -7,11 +7,13 @@ import com.sun.jna.platform.win32.WinDef.HWND;
 import com.sun.jna.platform.win32.WinNT;
 import com.sun.jna.platform.win32.WinUser;
 import com.sun.jna.ptr.IntByReference;
+import com.sun.jna.ptr.LongByReference;
 import com.sun.jna.win32.*;
 import org.apache.commons.codec.binary.Hex;
 
 public class GetWindowHandle {
 
+    static int BUFSIZE = 10;
 
     public interface User32 extends StdCallLibrary {
         User32 INSTANCE = (User32) Native.loadLibrary("user32", User32.class, W32APIOptions.DEFAULT_OPTIONS);
@@ -21,9 +23,7 @@ public class GetWindowHandle {
         int GetClassName(HWND hwnd, char[] lpString, int nMaxCount);
         HWND FindWindow(String lpClassName, String lpWindowName);
         WinDef.LRESULT SendMessage(HWND hWnd, int msg, int num1, int num2);
-        //int GetWindowThreadProcessId(HWND handler, Pointer arg);
-        int GetWindowThreadProcessId(HWND hWnd, IntByReference lpdwProcessId);
-
+        int GetWindowThreadProcessId(HWND hWnd, Pointer processId);
     }
 
     public interface Kernel32 extends Library {
@@ -40,8 +40,8 @@ public class GetWindowHandle {
         int GetLastError();
 
         boolean CloseHandle(WinNT.HANDLE handle);
-        boolean ReadProcessMemory(Pointer hProcess, Pointer lpBaseAddress, Pointer lpBuffer, int nSize, Pointer lpNumberOfBytesRead);
-
+        boolean ReadProcessMemory(WinNT.HANDLE hProcess, Pointer lpBaseAddress, Pointer lpBuffer, int nSize, Pointer lpNumberOfBytesRead);
+        boolean ReadProcessMemory(Pointer hProcess, int inBaseAddress, Pointer outputBuffer, int nSize, IntByReference outNumberOfBytesRead);
     }
 
     /*
@@ -61,7 +61,7 @@ _In_  DWORD dwProcessId
 
         desiredAccess = PROCESS_VM_READ | PROCESS_VM_WRITE | PROCESS_VM_OPERATION;
 
-        WinNT.HANDLE handle = instance.OpenProcess(desiredAccess, false, 8544);
+        WinNT.HANDLE handle = instance.OpenProcess(desiredAccess, false, processId);
         if (handle == null) {
             //System.out.println("Error:"+ Native.getLastError());
             System.out.println("Error:"+Kernel32.INSTANCE.GetLastError());
@@ -108,28 +108,77 @@ DWORD WINAPI GetWindowThreadProcessId(
   _In_       HWND hWnd,
   _Out_opt_  LPDWORD lpdwProcessId
 );
+
+	void GetWindowThreadProcessId(TestLibrary.HWND hwnd, TestLibrary.LPDWORD proc_id);
+
+	public static class HWND extends PointerType {
+		public HWND(Pointer address) {
+			super(address);
+		}
+		public HWND() {
+			super();
+		}
+	};
+
      */
-    public static int getThreadProcessId (HWND handler, int processId) {
-        return User32.INSTANCE.GetWindowThreadProcessId(handler, new IntByReference(processId));
+    public static int getThreadProcessId (Pointer handler) {
+        Pointer processId = new IntByReference(0).getPointer();
+        User32.INSTANCE.GetWindowThreadProcessId(new HWND(handler), processId);
+        return processId.getInt(0);
     }
 
-    public static boolean readProcessMemory(Pointer hProcess, Pointer lpBaseAddress, Pointer lpBuffer, int nSize, boolean lpNumberOfBytesRead) {
-        boolean success = Kernel32.INSTANCE.ReadProcessMemory(hProcess, lpBaseAddress, lpBuffer, nSize, null);
+    // ReadProcessMemory(hProcess, pBase, szBuf, sizeof(szBuf), NULL);
+    public static int[] readProcessMemory(Pointer hProcess, long lpBaseAddress) {
+        /***** Buffer to put filename into *****/
+        // TCHAR szBuf[BUFSIZE];
+        char[] filenameBuffer = new char[BUFSIZE];
+        WinNT.HANDLE handle = new WinNT.HANDLE(hProcess);
+
+        Pointer lpBaseAddressPtr = new LongByReference(lpBaseAddress).getPointer();
+        Pointer pointer = new IntByReference(0).getPointer();
+
+        Memory filenameBufferPtr = new Memory(filenameBuffer.length);
+        //filenameBufferPtr.write(0, filenameBuffer, 0, filenameBuffer.length);
+
+        boolean success = Kernel32.INSTANCE.ReadProcessMemory(handle, lpBaseAddressPtr, filenameBufferPtr, filenameBuffer.length, pointer);
+
         System.out.println("Error:" + Native.getLastError());
         System.out.println ("success: " + success);
-        return success; //.hashCode();
+        //System.out.println("filenameBuffer: " + filenameBuffer);
+
+        if(success) {
+
+            char[] bufferBytes = filenameBufferPtr.getCharArray(0, filenameBuffer.length);
+
+            int[] realValues = new int[bufferBytes.length];
+
+            for (int i=0; i<bufferBytes.length; i++) {
+                if(bufferBytes[i]<0) {
+                    realValues[i]=256 + bufferBytes[i];
+                }
+                else {
+                    realValues[i] = bufferBytes[i];
+                }
+            }
+System.out.println ("bufferBytes: " +bufferBytes);
+            return realValues;
+        }
+        else {
+            return null;
+        }
     }
 
-    public static HWND findWindow(String className, String windowName) throws WindowNotFoundException {
+    public static Pointer findWindow(String className, String windowName) throws WindowNotFoundException {
         HWND hwnd = User32.INSTANCE.FindWindow(className, windowName);
         if (hwnd == null) {
             throw new WindowNotFoundException(className, windowName);
         }
-        return hwnd; //.hashCode();
+        return hwnd.getPointer();
     }
 
-    public static WinDef.LRESULT sendMessage(HWND handler, int msg, int num1, int num2) {
-        return User32.INSTANCE.SendMessage(handler, msg, num1, num2);
+    public static WinDef.LRESULT sendMessage(Pointer handler, Integer msg, Integer num1, Integer num2) {
+        WinDef.LRESULT result = User32.INSTANCE.SendMessage(new HWND(handler), msg, num1, num2);
+        return result;
     }
 
     public static class WindowNotFoundException extends Exception {

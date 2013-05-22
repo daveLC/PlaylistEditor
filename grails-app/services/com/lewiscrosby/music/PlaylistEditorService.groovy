@@ -1,15 +1,18 @@
 package com.lewiscrosby.music
 
 import com.lewiscrosby.jna.GetWindowHandle
+import com.qotsa.jni.controller.WinampController
 import com.sun.jna.Native
 import com.sun.jna.Pointer
+import com.sun.jna.PointerType
 import com.sun.jna.platform.win32.User32
 import com.sun.jna.platform.win32.WinDef
 import com.sun.jna.platform.win32.WinUser
+import com.sun.jna.ptr.IntByReference
 
 class PlaylistEditorService {
 
-    def musicDirectory = 'C:\\Users\\davidlewis-crosby\\Music'
+    def musicDirectory = "${System.properties.'user.home'}\\Music"
 
     static def WM_USER = 0x0400
     static def WM_WAMP = 0x400
@@ -23,21 +26,32 @@ class PlaylistEditorService {
     static def PROCESS_VM_WRITE = 0x0020
     static def PROCESS_VM_OPERATION = 0x0008
 
-    static def BUFFER_SIZE = 5000
+    static def BUFFER_SIZE = 2000
+
+    static def WINAMP_HANDLE = 'Winamp v1.x'
+    //static def WINAMP_HANDLE = 'Winamp PE'
+
 
     def getFileList() {
-
+println "musicDirectory: $musicDirectory"
         def fileList = new File(musicDirectory)
 
         fileList.listFiles()
     }
 
+    def getPlaylist() {
+        WinampController winampController = new WinampController()
+        def playlistLength = winampController.getPlayListLength()
+        println "playlistLength: $playlistLength"
+    }
+
     def getCurrentPlaylist() {
-        //GetWindowHandle.enumWindows()
+
+        GetWindowHandle.enumWindows()
 
         /***** Get the Winamp window ******/
         // HWND hwndWinamp = FindWindow("Winamp v1.x", NULL);
-        def winAmpHandle = GetWindowHandle.findWindow('Winamp v1.x', null)
+        def winAmpHandle = GetWindowHandle.findWindow(WINAMP_HANDLE, null)
         if (!winAmpHandle) {
             return
         }
@@ -45,8 +59,7 @@ class PlaylistEditorService {
         /***** Get the processId of Winamp ******/
         // DWORD dwProcessId;
         // GetWindowThreadProcessId(hwndWinamp, &dwProcessId);
-        def processId
-        GetWindowHandle.getThreadProcessId(winAmpHandle, processId);
+        int processId = GetWindowHandle.getThreadProcessId(winAmpHandle);
         println "processId: $processId"
 
         /***** Get the Winamp process *****/
@@ -64,24 +77,24 @@ class PlaylistEditorService {
         // TCHAR szBuf[BUFSIZE];
         def filenameBuffer = new char[BUFFER_SIZE]
 
+        /***** Get the number of files in the playlist *****/
         // int nPLCount = SendMessage(hwndWinamp, WM_WA_IPC, 0, IPC_GETLISTLENGTH);
-        def playlistFileCount = GetWindowHandle.sendMessage(winAmpHandle, WM_WAMP, 0, PLAYLIST_LENGTH_MESSAGE)
-        println "playlistFileCount: $playlistFileCount"
+        int playlistFileCount = GetWindowHandle.sendMessage(winAmpHandle, WM_WAMP, 0, PLAYLIST_LENGTH_MESSAGE).intValue()
+        println "playlistFileCount: ${playlistFileCount}"
 
+        /***** Loop number of playlist items *****/
         // for (int i=0; i&lt;nPLCount; i++)
         for (int i=0; i < playlistFileCount; i++) {
 
+            /*****  ******/
             // LPVOID pBase = (LPVOID)::SendMessage(hwndWinamp, WM_USER, i, IPC_GETPLAYLISTFILE);
-            def playlist = GetWindowHandle.sendMessage(winAmpHandle, WM_USER, i, PLAYLIST_FILE_INFO_MESSAGE)
-
+            def playlist = GetWindowHandle.sendMessage(winAmpHandle, WM_USER, i, PLAYLIST_FILE_INFO_MESSAGE).longValue()
 
             // ReadProcessMemory(hProcess, pBase, szBuf, sizeof(szBuf), NULL);
-            GetWindowHandle.readProcessMemory(process, playlist.toPointer(), filenameBuffer, filenameBuffer.length, false.booleanValue())
+            def filename = GetWindowHandle.readProcessMemory(process, playlist)
 
-            // filenameBuffer now contains the filename for entry i
-            String b = new String(filenameBuffer);
-            String fileName = Native.toString(filenameBuffer);
-            println "b: $b"
+            println filename
+//            println "b: $b"
         }
 
 
