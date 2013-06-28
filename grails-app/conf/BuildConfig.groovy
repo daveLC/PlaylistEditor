@@ -37,6 +37,8 @@ grails.project.dependency.resolution = {
 
         test "org.spockframework:spock-grails-support:0.7-groovy-2.0"
 
+        compile "com.mpatric:mp3agic:0.8.+"
+
     }
 
     plugins {
