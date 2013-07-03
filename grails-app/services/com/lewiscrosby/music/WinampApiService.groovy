@@ -82,7 +82,7 @@ class WinampApiService {
 
         if (isValidMusicFile(filename)) {
             def isCurrent = winampController.getListPos() == position
-            playListFiles << new ListEntry(filename, position, isCurrent)
+            playListFiles << new PlaylistTrack(filename, position, isCurrent)
         }
     }
 
