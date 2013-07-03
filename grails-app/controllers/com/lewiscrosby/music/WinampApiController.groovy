@@ -6,9 +6,18 @@ class WinampApiController {
 
     def index() {
 
-        def fileList = winampApiService.getMusicFileList()
+        def trackList = winampApiService.getMusicFileList()
         def playList = winampApiService.getCurrentPlaylist()
 
-        [fileList: fileList, playList: playList]
+        [trackList: trackList, playList: playList]
+    }
+
+    def addToPlaylist (String filename) {
+
+        println "adding file: $filename"
+
+        winampApiService.addFileToPlaylist (filename)
+
+        redirect (action: "index")
     }
 }

@@ -6,4 +6,9 @@ class FileInteractionService {
 
         new File(directoryPath)
     }
+
+    def getFileExtension (String filename) {
+
+        filename.lastIndexOf('.') ? filename.substring(filename.lastIndexOf('.')+1) : ''
+    }
 }

@@ -2,7 +2,7 @@
 <%@ page contentType="text/html;charset=UTF-8" %>
 <html>
     <head>
-        <title></title>
+        <title>Playlist Editor</title>
     </head>
     <body>
         <h1>Playlist Editor</h1>
@@ -10,20 +10,20 @@
         <g:if test="${!playList}">
             <p>Winamp is not running, start Winamp to vew the playlist</p>
         </g:if>
-        <ul>
-            <g:each in="${playList}" var="playlistEntry">
-                <li>
+        <ol>
+            <g:each in="${playList}" var="playlistEntry" status="i">
+                <li ${playlistEntry.isCurrent ? 'class="current"' : ''}>
                     ${playlistEntry.artist} - ${playlistEntry.title}
                 </li>
             </g:each>
-        </ul>
+        </ol>
         <h2>Files</h2>
-        <ul>
-            <g:each in="${fileList}" var="file">
+        <ol>
+            <g:each in="${trackList}" var="track" status="i">
                 <li>
-                    ${file.name}
+                    <g:link action="addToPlaylist" params="[filename:track.path]">${track.name}</g:link>
                 </li>
             </g:each>
-        </ul>
+        </ol>
     </body>
 </html>
